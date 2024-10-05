@@ -3,21 +3,19 @@
     <script src="https://cdn.jsdelivr.net/npm/tdesign-vue-next/dist/tdesign.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tdesign-vue-next/dist/tdesign.min.css">
     <script src="https://cdn.jsdelivr.net/npm/dayjs/dayjs.min.js"></script>
-    <script src="overview.js"></script>
 </head>
 
 <div id="app">
     <t-card>
         <t-space direction="vertical" style="width: 100%;">
-            <p>选择机型并复制参数到工作流</p>
-            <t-auto-complete v-model="name" :options="overviewList" highlight-keyword filterable @select="handleSelect">
-            </t-auto-complete>
-
-            <t-descriptions layout="vertical" table-layout="auto">
-                <t-descriptions-item label="机器型号">{{selectedItem.id}}</t-descriptions-item>
-                <t-descriptions-item label="目标平台">{{selectedItem.target}}</t-descriptions-item>
+            <t-auto-complete v-model="enterName" :options="modelList" @select="handleSelect"></t-auto-complete>
+            <t-select v-model="selectedVersion">
+                <t-option v-for="version in versionList" :key="version" :value="version">{{ version }}</t-option>
+            </t-select>
+            <t-descriptions layout="vertical" table-layout="auto" v-if="selectedItem">
+                <t-descriptions-item label="机器型号">{{ selectedItem.id }}</t-descriptions-item>
+                <t-descriptions-item label="目标平台">{{ selectedItem.target }}</t-descriptions-item>
             </t-descriptions>
-
             <div style="text-align: right;">
                 <t-button shape="circle" variant="outline" @click="copyParameter">
                     <template #icon>
@@ -25,29 +23,61 @@
                     </template>
                 </t-button>
             </div>
-
         </t-space>
     </t-card>
+
 </div>
 
 <script type="module">
-    const { createApp, ref, onBeforeMount, onMounted } = Vue;
+    const { createApp, ref, onBeforeMount } = Vue;
 
     const app = createApp({
         setup() {
-            const name = ref('')
-            const overviewList = ref([])
+            const enterName = ref('');
+            const modelList = ref([]);
+            const selectedItem = ref(null);
+            let profilesData = ref(null);
+            const versionList = ref([]);
+            const selectedVersion = ref('');
 
-            const getOverview = (list) => list.map(item => item.id);
+            const fetchProfiles = async (version) => {
+                try {
+                    const response = await fetch(`https://immortalwrt.kyarucloud.moe/releases/${version}/.overview.json`);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const data = await response.json();
+                    modelList.value = data.profiles.map(profile => profile.id);
+                    profilesData.value = data; // 存储完整数据用于后续查找
+                } catch (error) {
+                    console.error('Failed to fetch profiles:', error);
+                }
+            };
 
-            const selectedItem = ref({ id: '', target: '' });
+            const fetchVersions = async () => {
+                try {
+                    const response = await fetch('https://immortalwrt.kyarucloud.moe/.versions.json');
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const data = await response.json();
+                    versionList.value = data.versions_list;
+                    selectedVersion.value = data.stable_version; // 默认选择最新版本
+                    if (versionList.value.length > 0) {
+                        fetchProfiles(versionList.value[0]); // 使用第一个版本号请求模型列表
+                    }
+                } catch (error) {
+                    console.error('Failed to fetch versions:', error);
+                }
+            };
+
             const handleSelect = (value) => {
-                const foundOption = overview.find(opt => opt.id === value);
-
-                if (foundOption) {
-                    selectedItem.value = { ...selectedItem.value, id: value, target: foundOption.target };
+                const selectedProfile = profilesData.value.profiles.find(profile => profile.id === value);
+                if (selectedProfile) {
+                    selectedItem.value = selectedProfile;
+                    // console.log(`Selected Model ID: ${selectedProfile.id}, Target: ${selectedProfile.target}`);
                 } else {
-                    console.warn('未找到对应选项:', value);
+                    // console.warn(`No profile found for ID: ${value}`);
                 }
             };
 
@@ -63,26 +93,23 @@
             };
 
             onBeforeMount(() => {
-                fetchData().then(data => {
-                    overviewList.value = getOverview(data);
-                    overview = data;
-                }).catch(error => {
-                    console.error('There was a problem with the fetch operation:', error);
-                });
-            })
-            onMounted(() => {
-                //console.log('3.-组件挂载到页面之后执行-------onMounted')
-                overviewList.value = getOverview(overview)
-            })
+
+                fetchVersions();
+            });
+
             return {
-                name, overviewList, getOverview, overview, selectedItem,
-                handleSelect, copyParameter
-            }
-        }
+                enterName,
+                modelList,
+                selectedItem,
+                handleSelect,
+                versionList,
+                selectedVersion,
+                copyParameter
+            };
+        },
     });
 
     app.use(TDesign);
-
     app.mount('#app');
 </script>
 
