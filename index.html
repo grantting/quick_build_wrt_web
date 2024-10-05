@@ -53,7 +53,7 @@
 
             // 复制参数
             const copyParameter = async () => {
-                const textToCopy = `${selectedItem.value.id}, ${selectedItem.value.target}`;
+                const textToCopy = `${selectedItem.value.id},${selectedItem.value.target}`;
                 try {
                     await navigator.clipboard.writeText(textToCopy);
                     alert('已成功复制到剪贴板');
